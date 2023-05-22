@@ -1,0 +1,328 @@
+#include <windows.h>
+#include <GL/gl.h>
+#include <GL/glut.h>
+#include <math.h>
+#define PI 3.1415926535898
+#define WIDTH glutGet(GLUT_SCREEN_WIDTH)
+#define HEIGHT glutGet(GLUT_SCREEN_HEIGHT)
+
+int		refreshMills = 15, // refresh time in miliseconds
+		ok = 0,	// check variable in order to create a delay function
+		angle = 60,
+		mouseButton;
+float	waterLevel1 = 0.46,		
+		waterLevel = 0.46,
+		waterLevelPipe1 = 0.1,
+		waterLevelPipe = 0.1;	// the value with which the water 'rises' with each refresh
+								// initially set to the minimal value of the tank (Y axis) / pipe (X axis)
+static GLfloat spin = 0.0;
+
+void glDrawCircle(float X, float Y, float R, int no_segments) 
+{
+	// X and Y are the coordinates of the origin
+	// R = radius and hypothenuse therefore:
+	// cos(angle) = X/R (adjacent side over hypothenuse), so X = R * cos(angle)
+	// same for Y = R * sin(angle)
+	glBegin(GL_LINE_LOOP);
+	for (int i = 0; i < no_segments; i++) 
+	{
+		float angle = 2 * PI * i / no_segments; // get the current angle 
+		float x = R * cosf(angle);	// calculate the x component 
+		float y = R * sinf(angle);	// calculate the y component 
+		glVertex2f(x + X, y + Y);	// output vertex 
+	}
+	glEnd();
+}
+
+void glDrawFilledCircle(float X, float Y, float R, int no_segments)
+{
+	glBegin(GL_TRIANGLE_FAN);
+	// the origin will be the first vertex,
+	glVertex2f(X, Y);
+	// while the other vertexes will be represented as such:
+	for (int i = 0; i < no_segments; i++)
+	{
+		float angle = 2 * PI * i / no_segments; // current angle
+		float x = R * cosf(angle);	
+		float y = R * sinf(angle);
+		glVertex2f(x + X, y + Y);
+	}
+	glEnd();
+}
+
+
+void display(void)
+{
+	glClear(GL_COLOR_BUFFER_BIT); // delete all pixels
+	glLineWidth(5.0); // set the LINE primitive width to 5
+
+	/* *********************************************** */
+	/* SETTING UP PRIMITIVES FOR OUTLINING THE OBJECTS */
+	/* *********************************************** */
+
+	glPopMatrix();
+	glColor3f(0.0, 0.0, 0.0); // tank outline color
+	glBegin(GL_LINE_STRIP); // creating tank outline and then set the coordinates for the corners
+		glVertex2f(0.45, 0.85);
+		glVertex2f(0.45, 0.45);
+		glVertex2f(0.75, 0.45);
+		glVertex2f(0.75, 0.85);
+	glEnd(); // TANK outline ends
+
+	glColor3f(0.0, 0.0, 0.0); // pipe outline color
+	glBegin(GL_LINE_STRIP); // creating pipe outline + coordinates
+		glVertex2f(0.1, 0.45);
+		glVertex2f(0.45, 0.45);
+		glVertex2f(0.45, 0.55);
+		glVertex2f(0.1, 0.55);
+	glEnd(); // PIPE outline ends
+
+	glLineWidth(0.5); // reset line width to a low number
+
+	glColor3f(0.95, 0.133, 0.135); 
+	glDrawFilledCircle(0.2, 0.69, 0.02, 120); // mechanism piece connecting the valve to the pipe (using GL_TRIANGLE_FAN)
+	glBegin(GL_POLYGON);
+		glVertex3f(0.18, 0.69, 0.0);
+		glVertex3f(0.22, 0.69, 0.0);
+		glVertex3f(0.24, 0.551, 0.0);
+		glVertex3f(0.16, 0.551, 0.0);
+	glEnd();
+	glColor3f(0.222, 0.148, 0.2); // valve outline color
+	glDrawFilledCircle(0.2, 0.69, 0.01, 100); // connecting piece in the middle of the valve (using GL_TRIANGLE_FAN)
+
+	glLineWidth(8.0); // reset line width to a high value
+	glDrawCircle(0.2, 0.69, 0.08, 50);	// draws a circle formed out of 100 line segments,
+										// with the origin in 0.2 and 0.69
+
+	/* ******************************** */
+	/* VALVE-TURNING ANIMATION ON CLICK */
+	/* ******************************** */
+
+	glPushMatrix();
+	glTranslatef(0.2, 0.69, 0.0);	// third: translate the valve back to its original position
+	glRotatef(spin, 0.0, 0.0, -1.0);// second: rotate the valve around its z axis
+	glTranslatef(-0.2, -0.69, 0.0); // first: translate to the axis' origin
+
+	// now to finish up on the handwheel part of the valve
+	glLineWidth(4.0);
+	glBegin(GL_LINES);
+		glVertex2f(0.2, 0.61);
+		glVertex2f(0.2, 0.77);
+	glEnd();
+	glBegin(GL_LINES);
+		glVertex2f(0.2 + 0.04 * sqrt(3), 0.69 + 0.04);
+		glVertex2f(0.2 - 0.04 * sqrt(3), 0.69 - 0.04);
+	glEnd();
+	glBegin(GL_LINES);
+		glVertex2f(0.2 - 0.04 * sqrt(3), 0.69 + 0.04);
+		glVertex2f(0.2 + 0.04 * sqrt(3), 0.69 - 0.04);
+	glEnd();
+	glPopMatrix();
+	glutSwapBuffers();
+
+	/* ************************************************ */
+	/* PIPE-FILLING WATER BLOCK ANIMATION WITH GRADIENT */
+	/* ************************************************ */
+	
+	glPushMatrix(); // save the current coordinate system to the stack
+	
+	// PIPE WATER GRADIENT formed from 4 triangles
+
+	glBegin(GL_TRIANGLES); // base water triangle block
+		glColor3f(0.2, 0.5, 0.5);		// set color to teal
+		glVertex3f(0.1, 0.46, 0.0);
+		glColor3f(0.2, 0.5, 0.5);		// set color to teal
+		glVertex3f(0.1, 0.54, 0.0);
+		glColor3f(0.19, 0.65, 0.63);	// set color to the middle shade between turquoise and teal
+		glVertex3f(waterLevelPipe1, 0.5, 0.0);
+	glEnd();
+
+	glBegin(GL_TRIANGLES); // right-side water triangle block
+		glColor3f(0.2, 0.5, 0.5);		// teal
+		glVertex3f(0.1, 0.46, 0.0);
+		glColor3f(0.19, 0.65, 0.63);	// mid-shade
+		glVertex3f(waterLevelPipe1, 0.5, 0.0);
+		glColor3f(0.18, 0.83, 0.78);	// turquoise
+		glVertex3f(waterLevelPipe, 0.46, 0.0);
+	glEnd();
+
+	glBegin(GL_TRIANGLES); // left-side water triangle block
+		glColor3f(0.2, 0.5, 0.5);		// teal
+		glVertex3f(0.1, 0.54, 0.0);
+		glColor3f(0.19, 0.65, 0.63);	// mid color
+		glVertex3f(waterLevelPipe1, 0.5, 0.0);
+		glColor3f(0.18, 0.83, 0.78);	// turquoise
+		glVertex3f(waterLevelPipe, 0.54, 0.0);
+	glEnd();
+
+	if (waterLevelPipe >= 0.275) // should only start filling the top the moment it reaches the mid-pipe
+	{
+		glBegin(GL_TRIANGLES); // top water triangle block
+			glColor3f(0.18, 0.83, 0.78);	// turquoise
+			glVertex3f(waterLevelPipe, 0.54, 0.0);
+			glColor3f(0.18, 0.83, 0.78);	// turquoise
+			glVertex3f(waterLevelPipe, 0.46, 0.0);
+			glColor3f(0.19, 0.65, 0.63);	// mid color
+			glVertex3f(0.275, 0.5, 0.0);
+		glEnd();
+	}
+	// pipe is filled to the brim with water!
+
+	glPopMatrix(); // restores the prior coordinate system
+	
+	/* ************************************************ */
+	/* TANK-FILLING WATER BLOCK ANIMATION WITH GRADIENT */
+	/* ************************************************ */
+
+	if (waterLevelPipe >= 0.425) // if the pipe is filled with water,
+								 // only then we can fill the tank with water
+	{
+		glPushMatrix();
+
+		// creating a teal gradient using 4 triangles
+
+		glBegin(GL_TRIANGLES); // base water triangle block
+			glColor3f(0.2, 0.5, 0.5);		// set color to teal
+			glVertex3f(0.74, 0.46, 0.0);
+			glColor3f(0.2, 0.5, 0.5);		// set color to teal
+			glVertex3f(0.46, 0.46, 0.0);
+			glColor3f(0.19, 0.65, 0.63);	// set color to the middle shade between turquoise and teal
+			glVertex3f(0.6, waterLevel1, 0.0);
+		glEnd();
+
+		glBegin(GL_TRIANGLES); // right-side water triangle block
+			glColor3f(0.2, 0.5, 0.5);		// teal
+			glVertex3f(0.74, 0.46, 0.0);
+			glColor3f(0.19, 0.65, 0.63);	// mid-shade
+			glVertex3f(0.6, waterLevel1, 0.0);
+			glColor3f(0.18, 0.83, 0.78);	// turquoise
+			glVertex3f(0.74, waterLevel, 0.0);
+		glEnd();
+
+		glBegin(GL_TRIANGLES); // left-side water triangle block
+			glColor3f(0.2, 0.5, 0.5);		// teal
+			glVertex3f(0.46, 0.46, 0.0);
+			glColor3f(0.19, 0.65, 0.63);	// mid color
+			glVertex3f(0.6, waterLevel1, 0.0);
+			glColor3f(0.18, 0.83, 0.78);	// turquoise
+			glVertex3f(0.46, waterLevel, 0.0);
+		glEnd();
+
+		if (waterLevel >= 0.65) // should only start filling the top the moment it reaches the mid-tank
+		{
+			glBegin(GL_TRIANGLES); // top water triangle block
+				glColor3f(0.18, 0.83, 0.78);	// turquoise
+				glVertex3f(0.46, waterLevel, 0.0);
+				glColor3f(0.18, 0.83, 0.78);	// turquoise
+				glVertex3f(0.74, waterLevel, 0.0);
+				glColor3f(0.19, 0.65, 0.63);	// mid color
+				glVertex3f(0.6, 0.65, 0.0);
+			glEnd();
+		}
+	
+		glPopMatrix();
+		// water tank was filled to the brim!
+	}
+
+	glFlush(); // force execute the commands
+}
+
+void waterFlowingAnimationTimer(int value) {
+	if (mouseButton) // start the water animation ONLY IF the valve is ON
+	{
+		if (waterLevelPipe1 <= 0.275)
+			waterLevelPipe1 += 0.0025;
+		if (waterLevelPipe <= 0.425) // until the water level of the pipe reaches max,
+		{
+			waterLevelPipe += 0.0025; // increase
+			if (waterLevelPipe >= 0.425) ok = 1; // if it's maxed, set ok to true
+		}
+		else
+			if (waterLevelPipe != 0.44) // if water level of the pipe reached max,
+			{
+				waterLevelPipe = 0.44;	// set water level of the pipe to a nicer value for aesthetic purpose
+				if (ok == 1)
+					ok = 0;	// reset ok to 0 so it doesn't always delay
+				// the delay is meant to be between the pipe water animation and the tank water animation
+				// which should only be done if the pipe is maxed ( == .44)
+				else
+				{
+					if (waterLevel <= 0.825)
+						waterLevel += 0.0025;
+					if (waterLevel1 <= 0.65)
+						waterLevel1 += 0.0025;
+				}
+			}
+	}
+	glutPostRedisplay();
+	glutTimerFunc(refreshMills, waterFlowingAnimationTimer, 0);
+}
+
+void spinDisplayON(void) // spin clockwise if the valve is open
+{
+	if (spin <= 100.0)
+		spin = spin + 0.08;
+	glutPostRedisplay();
+}
+
+void spinDisplayOFF(void) // spin counter clockwise if the valve is closed
+{
+	if (spin > 0.4)
+		spin -= 0.04;
+	else spin = 0.0;
+	glutPostRedisplay();
+}
+
+void reshape(int w, int h)
+{
+	glViewport(0, 0, (GLsizei)w, (GLsizei)h);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(0.0, 1.0, 0.0, 1.0, -1.0, 1.0);
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+}
+void mouse(int button, int state, int x, int y)
+{
+	if (waterLevel <= 0.825) // if the tank is not yet completely filled, 
+		switch (button) {	 // then we can turn the valve ON/OFF
+		case GLUT_LEFT_BUTTON:
+			if (state == GLUT_DOWN)
+			{
+				glutIdleFunc(spinDisplayON);
+				mouseButton = 1; // it's pressed
+			}
+			break;
+		case GLUT_RIGHT_BUTTON:
+			if (state == GLUT_DOWN)
+			{
+				glutIdleFunc(spinDisplayOFF);
+				mouseButton = 0; // it's pressed again, signaling the end of the animation
+			}
+			break;
+		default:
+			break;
+		}
+}
+
+void init(void)
+{
+	// setting background color to white
+	glClearColor(1.0, 5.0, 1.0, 0.0);
+}
+
+int main(int argc, char** argv)
+{
+	glutInit(&argc, argv);
+	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+	glutInitWindowSize(HEIGHT, HEIGHT); // I just want it to be square, but normally it should be (WIDTH, HEIGHT)
+	glutInitWindowPosition(0, 0);
+	glutCreateWindow("Water tank filling animation");
+	init();
+	glutDisplayFunc(display);
+	glutReshapeFunc(reshape);
+	glutMouseFunc(mouse);
+	glutTimerFunc(0, waterFlowingAnimationTimer, 0);
+	glutMainLoop();
+	return 0;
+}
